@@ -1,10 +1,11 @@
 import { icons } from "@/constants/icons";
 import { useFetch } from "@/hooks/use-fetch";
 import { fetchMovieCredits, fetchMovieDetails } from "@/services/api";
-import { getSavedMovies, saveMovie } from "@/services/appwrite";
+import { saveMovie, unsaveMovie } from "@/services/appwrite";
+import { useSavedMovies } from "@/context/SavedMoviesContext";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,14 +21,16 @@ import CastCard from "../../components/CastCard";
 
 interface MovieInfoProps {
   label: string;
-  value?: string | number | null;
+  value?: string | number | null | { id: number; name: string }[];
 }
 
 const MovieInfo = ({ label, value }: MovieInfoProps) => (
   <View className="flex-col items-start justify-center mt-5">
     <Text className="text-light-200 font-normal text-sm">{label}</Text>
     <Text className="text-light-100 font-bold text-sm mt-2">
-      {value || "N/A"}
+      {Array.isArray(value)
+        ? value.map((v) => v.name).join(" • ")
+        : value || "N/A"}
     </Text>
   </View>
 );
@@ -37,7 +40,6 @@ const MovieDetails = () => {
   const { id } = useLocalSearchParams();
   const [director, setDirector] = useState<string | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
-
   const { data: movie, loading } = useFetch(async () => {
     const [details, credits] = await Promise.all([
       fetchMovieDetails(id as string),
@@ -53,15 +55,34 @@ const MovieDetails = () => {
     return details;
   });
 
-  const { data: savedMovies, loading: savedMovieLoading, refetch } = useFetch(() =>
-    getSavedMovies(), 
-  );
+  const { refreshSavedMovies, savedMovies } = useSavedMovies();
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+
+  useEffect(() => {
+    if (movie) {
+      const saved = savedMovies?.some((m: SavedMovie) => m.movie_id === movie.id);
+      setIsSaved(!!saved);
+    }
+  }, [movie, savedMovies]);
 
   const handleSavedMovie = async () => {
+    if (!movie) return;
+
     try {
-      await saveMovie(movie);
-      refetch();
-      Alert.alert("Success", "Movie saved to your collection");
+      setIsSaving(true);
+      let result;
+      
+      if (isSaved) {
+        result = await unsaveMovie(movie);
+      } else {
+        result = await saveMovie(movie);
+      }
+      
+      await refreshSavedMovies();
+      if (result?.message) {
+        Alert.alert("Success", result.message);
+      }
     } catch (error: any) {
       if (error.message === "User not authenticated") {
         Alert.alert(
@@ -76,6 +97,8 @@ const MovieDetails = () => {
         Alert.alert("Error", "Failed to save movie");
       }
       console.log("Error saving movie:", error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -110,11 +133,11 @@ const MovieDetails = () => {
             />
           </TouchableOpacity>
           <TouchableOpacity
-            disabled={loading || savedMovieLoading}
+            disabled={loading || isSaving}
             onPress={handleSavedMovie}
             className="absolute -bottom-7 right-24 rounded-full size-14 bg-white flex items-center justify-center"
           >
-            {savedMovies?.some((m) => m.movie_id === movie?.id) ? (
+            {isSaved ? (
               <Ionicons name="bookmark" size={24} color="#AB8BFF" />
             ) : (
               <Image source={icons.save} className="size-6" />

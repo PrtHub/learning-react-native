@@ -1,12 +1,19 @@
 import SavedCard from "@/components/saved-card";
 import { icons } from "@/constants/icons";
 import { images } from "@/constants/images";
-import { useFetch } from "@/hooks/use-fetch";
-import { getSavedMovies } from "@/services/appwrite";
 import { ActivityIndicator, FlatList, Image, Text, View } from "react-native";
+import { useSavedMovies } from "@/context/SavedMoviesContext";
+import { useEffect } from "react";
 
 const Saved = () => {
-  const { data: movies, loading, error } = useFetch(() => getSavedMovies());
+  const { savedMovies, refreshSavedMovies, isLoading, error } = useSavedMovies();
+
+   useEffect(() => {
+    const loadMovies = () => {
+     refreshSavedMovies();
+    };
+    loadMovies();
+   }, []);
 
   return (
     <View className="flex-1 bg-primary">
@@ -15,9 +22,8 @@ const Saved = () => {
         className="w-full absolute h-2/3 inset-0 z-0"
         resizeMode="cover"
       />
-
       <FlatList
-        data={movies}
+        data={savedMovies}
         renderItem={({ item }) => <SavedCard movie={item} />}
         keyExtractor={(item) => item.movie_id.toString()}
         numColumns={3}
@@ -43,7 +49,7 @@ const Saved = () => {
               </Text>
             </View>
 
-            {loading && (
+            {isLoading && (
               <ActivityIndicator
                 size="large"
                 color="#0000ff"
@@ -57,7 +63,7 @@ const Saved = () => {
           </>
         }
         ListEmptyComponent={
-          !loading && !error ? (
+          !isLoading && !error ? (
             <View className="mt-10 px-5">
               <Text className="text-center text-gray-500">No movies found</Text>
             </View>

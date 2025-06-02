@@ -49,7 +49,7 @@ export const getTrendingMovies = async (): Promise<
 > => {
   try {
     const result = await database.listDocuments(DATABASE_ID, COLLECTION_ID, [
-      Query.orderAsc("count"),
+      Query.orderDesc("count"),
       Query.limit(5),
     ]);
 
@@ -88,10 +88,38 @@ export const saveMovie = async (movie: Movie) => {
       }
     );
 
-    return { success: true, data: result };
-    
+    return { success: true, data: result, message: 'Movie saved to your collection' };
   } catch (error) {
     console.log('Error saving movie:', error);
+    throw error;
+  }
+};
+
+export const unsaveMovie = async (movie: Movie) => {
+  try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      throw new Error('User not authenticated');
+    }
+    
+    const existingMovie = await database.listDocuments(DATABASE_ID, SAVED_MOVIES_COLLECTION_ID, [
+      Query.equal("movie_id", movie.id),
+      Query.equal("user_id", currentUser.$id),
+    ]);
+
+    if(existingMovie.documents.length === 0){
+      return { success: true, message: 'Movie not saved' };
+    }
+
+    const result = await database.deleteDocument(
+      DATABASE_ID,
+      SAVED_MOVIES_COLLECTION_ID,
+      existingMovie.documents[0].$id
+    );
+
+    return { success: true, data: result, message: 'Movie removed from your collection' };
+  } catch (error) {
+    console.log('Error unsaving movie:', error);
     throw error;
   }
 };
